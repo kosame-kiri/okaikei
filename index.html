@@ -195,8 +195,10 @@ td.r,th.r{text-align:right}
   .quick button{font-size:16px;min-height:56px;padding:0 2px;white-space:nowrap}
   .pad button{font-size:28px;min-height:56px}
   .confirm{min-height:68px;font-size:24px}
-  #items{flex-direction:column}
-  .form{width:auto;border-right:0;border-bottom:3px solid var(--line)}
+  /* フォームと一覧を別スクロールにせず、画面全体で1本にスクロール */
+  #items{flex-direction:column;height:auto;min-height:100%}
+  .form{width:auto;border-right:0;border-bottom:3px solid var(--line);overflow:visible}
+  .list{flex:none;overflow:visible}
   .sum{grid-template-columns:1fr 1fr}
   .sum .main{grid-column:1/-1}
   .sum .v{font-size:30px}
