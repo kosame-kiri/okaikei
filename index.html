@@ -74,6 +74,7 @@ main{flex:1;min-height:0;overflow:auto}
 .total .amt{font-size:56px;font-weight:900;line-height:1.1;text-align:right}
 .total .pcs{font-size:16px;text-align:right}
 .go{margin:12px 16px 16px;min-height:80px;font-size:28px;background:#000;color:#fff}
+.go-amt{display:none}
 
 .empty{margin:auto;text-align:center;padding:32px;color:var(--mute)}
 .empty .big{font-size:64px}
@@ -223,7 +224,7 @@ td.r,th.r{text-align:right}
   html:not([data-size=m]):not([data-size=s]) .good .img{font-size:48px}
   html:not([data-size=m]):not([data-size=s]) .good .nm{font-size:16px}
   html:not([data-size=m]):not([data-size=s]) .good .pr{font-size:22px}
-  /* カートは下部固定の1段バー［点数・明細｜合計｜会計する］。点数をタップで明細を開く */
+  /* カートは下部固定の1段バー［点数・明細｜合計＋会計する］。点数をタップで明細を開く */
   .cart{position:fixed;left:0;right:0;bottom:0;width:auto;border-left:0;border-top:3px solid var(--line);background:#fff;max-height:75vh;z-index:5;
     display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:minmax(0,1fr) auto;padding-bottom:env(safe-area-inset-bottom)}
   .cart h2{display:none}
@@ -231,11 +232,11 @@ td.r,th.r{text-align:right}
   .cart:not(.open) .lines{display:none}
   .cart-toggle{grid-row:2;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:0;border:0;border-right:2px solid var(--line);border-radius:0;font-size:16px;line-height:1.2;padding:0 10px;min-height:64px;white-space:nowrap}
   .cart-toggle span+span{font-size:13px;font-weight:600}
-  .total{grid-row:2;display:flex;justify-content:space-between;align-items:center;gap:6px;border-top:0;padding:0 10px;align-self:stretch;min-width:0}
-  .total .lbl{font-size:14px;white-space:nowrap}
-  .total .amt{font-size:min(30px,7vw);white-space:nowrap}
-  .total .pcs{display:none}
-  .go{grid-row:2;margin:6px 8px;min-height:56px;font-size:20px;padding:0 12px;white-space:nowrap}
+  /* 合計は会計ボタンの中に大きく出す（狭い画面でも切れないように） */
+  .total{display:none}
+  .go{grid-row:2;grid-column:2/-1;margin:6px 8px;min-height:60px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;white-space:nowrap;min-width:0}
+  .go-amt{display:block;color:var(--accent);font-size:min(32px,8.5vw);font-weight:900;overflow:hidden;flex:1 1 0;min-width:0;text-align:left}
+  .go-lbl{font-size:18px;flex:none}
   .pay-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
   .disp{border-right:0;border-bottom:3px solid var(--line);padding:10px 14px;gap:6px}
   .row .v{font-size:30px}
@@ -285,7 +286,7 @@ td.r,th.r{text-align:right}
         <div class="amt num yen" id="total">0</div>
         <div class="pcs" id="pcs">0点</div>
       </div>
-      <button class="go" id="goPay">会計する →</button>
+      <button class="go" id="goPay"><span class="go-amt num yen" id="goAmt">0</span><span class="go-lbl">会計する →</span></button>
     </aside>
   </section>
 
@@ -511,13 +512,22 @@ function renderReg(){
   $('#cartLines').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const id=b.dataset.id;S.cart[id]+= +b.dataset.d;if(S.cart[id]<=0)delete S.cart[id];save();renderReg()});
   $('#cartLines').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{delete S.cart[b.dataset.del];save();renderReg()});
   const t=cartTotal(), p=cartPcs();
-  $('#total').textContent=t.toLocaleString('ja-JP'); $('#pcs').textContent=p+'点';
+  $('#total').textContent=$('#goAmt').textContent=t.toLocaleString('ja-JP');fitGoAmt(); $('#pcs').textContent=p+'点';
   $('#cartToggleLbl').textContent=`${p}点`;
   $('#goPay').disabled=t<=0; $('#clearCart').disabled=!p;
 }
 $('#clearCart').onclick=()=>{S.cart={};save();renderReg()};
 $('#cartToggle').onclick=()=>$('#cart').classList.toggle('open');
 $('#goPay').onclick=()=>openPay();
+// スマホの会計ボタン内の合計: 桁が多くて入りきらないときは文字を小さくして全部見せる
+function fitGoAmt(){
+  const el=$('#goAmt');el.style.fontSize='';
+  if(!el.offsetWidth)return;
+  let fs=parseFloat(getComputedStyle(el).fontSize);
+  while(el.scrollWidth>el.clientWidth&&fs>14){fs-=1;el.style.fontSize=fs+'px'}
+}
+addEventListener('resize',fitGoAmt);
+if(document.fonts)document.fonts.ready.then(fitGoAmt);
 document.addEventListener('click',e=>{const b=e.target.closest('[data-goto]');if(b)tab(b.dataset.goto)});
 
 // ---------- 2. 会計 ----------
