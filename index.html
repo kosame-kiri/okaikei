@@ -39,6 +39,7 @@ header h1{margin:0;font-size:20px;padding:0 16px;display:flex;align-items:center
 nav{display:flex;flex:1}
 nav button{flex:1;border:0;border-left:3px solid var(--line);border-radius:0;font-size:22px;min-height:68px}
 nav button[aria-selected=true]{background:#000;color:#fff}
+nav .conf-tab{flex:0 0 auto;padding:0 20px}
 
 main{flex:1;min-height:0;overflow:auto}
 .screen{display:none;height:100%}
@@ -46,7 +47,7 @@ main{flex:1;min-height:0;overflow:auto}
 
 /* ===== 1. レジ ===== */
 #reg{gap:0}
-.goods{flex:1;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;align-content:start}
+.goods{--tile:170px;flex:1;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tile),1fr));gap:14px;align-content:start}
 /* ボタン全体が正方形の画像。名前と値段は下の黒帯に白文字で重ねる（どんな画像でも読めるように） */
 .good{display:block;aspect-ratio:1;padding:0;overflow:hidden;text-align:left;position:relative}
 .good .img{position:absolute;inset:0;overflow:hidden;display:grid;place-items:center;padding-bottom:45%;font-size:56px}
@@ -150,6 +151,30 @@ main{flex:1;min-height:0;overflow:auto}
 .crop-ctl p{margin:0;font-size:15px;color:var(--mute)}
 .crop-ctl .save{background:#000;color:#fff}
 
+/* ボタンの大きさ（設定画面で切り替え。html[data-size]） */
+[data-size=m] .goods{--tile:135px;gap:10px}
+[data-size=m] .good .img{font-size:44px}
+[data-size=m] .good .cap{padding:4px 8px 6px}
+[data-size=m] .good .nm{font-size:15px;-webkit-line-clamp:1}
+[data-size=m] .good .pr{font-size:20px}
+[data-size=m] .good .badge{min-width:40px;height:40px;font-size:18px}
+[data-size=s] .goods{--tile:105px;gap:8px}
+[data-size=s] .good .img{font-size:32px}
+[data-size=s] .good .cap{padding:3px 6px 4px}
+[data-size=s] .good .nm{font-size:12px;-webkit-line-clamp:1}
+[data-size=s] .good .pr{font-size:16px}
+[data-size=s] .good .badge{top:4px;right:4px;min-width:32px;height:32px;font-size:16px;border-width:2px;padding:0 5px}
+
+/* ===== 5. 設定 ===== */
+#conf{flex-direction:column;padding:16px 20px;gap:24px;overflow:auto;height:auto;min-height:100%}
+.conf-block h2{margin:0 0 4px;font-size:22px}
+.conf-block p{font-size:15px;color:var(--mute);margin:4px 0 10px}
+.sizes{display:flex;gap:10px;max-width:560px}
+.sizes button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:80px}
+.sizes b{font-size:28px}
+.sizes small{font-size:14px;font-weight:600}
+.sizes button[aria-checked=true]{background:#000;color:#fff}
+
 /* ===== 4. 履歴 ===== */
 #hist{flex-direction:column;padding:16px 20px;gap:16px;overflow:auto;height:auto;min-height:100%}
 .sum{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -178,7 +203,7 @@ td.r,th.r{text-align:right}
 .hbar button{min-height:52px;padding:0 16px;font-size:16px}
 .hbar .sp{flex:1}
 .hbar .danger{border-color:var(--ng);color:var(--ng)}
-.backup{border-top:3px solid var(--line);margin-top:24px;padding-top:12px}
+.backup{border-top:3px solid var(--line);padding-top:16px}
 .backup p{font-size:15px;color:var(--mute);margin:4px 0 8px}
 .backup .row2{display:flex;gap:10px;flex-wrap:wrap}
 .backup button{min-height:52px;padding:0 16px;font-size:16px}
@@ -189,20 +214,28 @@ td.r,th.r{text-align:right}
   header h1{display:none}
   nav button{font-size:18px;min-height:60px}
   nav button:first-child{border-left:0}
+  nav .conf-tab{padding:0 14px}
+  nav .conf-tab span{display:none}
   #reg{flex-direction:column}
-  .goods{grid-template-columns:repeat(2,1fr);grid-auto-rows:max-content;gap:10px;padding:10px;padding-bottom:200px}
-  .good .img{font-size:48px}
-  .good .nm{font-size:16px}
-  .good .pr{font-size:22px}
-  /* カートは下部固定シート。タップで明細を開く */
-  .cart{position:fixed;left:0;right:0;bottom:0;width:auto;border-left:0;border-top:3px solid var(--line);background:#fff;max-height:75vh;z-index:5}
+  .goods{--cols:2;grid-template-columns:repeat(var(--cols),1fr);grid-auto-rows:max-content;gap:10px;padding:10px;padding-bottom:100px}
+  [data-size=m] .goods{--cols:3;gap:8px;padding:8px 8px 100px}
+  [data-size=s] .goods{--cols:4;gap:6px;padding:6px 6px 100px}
+  html:not([data-size=m]):not([data-size=s]) .good .img{font-size:48px}
+  html:not([data-size=m]):not([data-size=s]) .good .nm{font-size:16px}
+  html:not([data-size=m]):not([data-size=s]) .good .pr{font-size:22px}
+  /* カートは下部固定の1段バー［点数・明細｜合計｜会計する］。点数をタップで明細を開く */
+  .cart{position:fixed;left:0;right:0;bottom:0;width:auto;border-left:0;border-top:3px solid var(--line);background:#fff;max-height:75vh;z-index:5;
+    display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:minmax(0,1fr) auto;padding-bottom:env(safe-area-inset-bottom)}
   .cart h2{display:none}
-  .cart-toggle{display:flex;justify-content:space-between;align-items:center;border:0;border-radius:0;border-bottom:2px solid var(--line);font-size:18px;padding:0 16px;min-height:48px}
+  .lines{grid-column:1/-1;grid-row:1;border-bottom:2px solid var(--line)}
   .cart:not(.open) .lines{display:none}
-  .total{display:flex;justify-content:space-between;align-items:center;padding:6px 14px}
-  .total .amt{font-size:40px}
+  .cart-toggle{grid-row:2;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:0;border:0;border-right:2px solid var(--line);border-radius:0;font-size:16px;line-height:1.2;padding:0 10px;min-height:64px;white-space:nowrap}
+  .cart-toggle span+span{font-size:13px;font-weight:600}
+  .total{grid-row:2;display:flex;justify-content:space-between;align-items:center;gap:6px;border-top:0;padding:0 10px;align-self:stretch;min-width:0}
+  .total .lbl{font-size:14px;white-space:nowrap}
+  .total .amt{font-size:min(30px,7vw);white-space:nowrap}
   .total .pcs{display:none}
-  .go{margin:8px 10px 10px;min-height:64px;font-size:24px}
+  .go{grid-row:2;margin:6px 8px;min-height:56px;font-size:20px;padding:0 12px;white-space:nowrap}
   .pay-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
   .disp{border-right:0;border-bottom:3px solid var(--line);padding:10px 14px;gap:6px}
   .row .v{font-size:30px}
@@ -235,6 +268,7 @@ td.r,th.r{text-align:right}
     <button role="tab" data-tab="reg" aria-selected="true">🧾 レジ</button>
     <button role="tab" data-tab="hist" aria-selected="false">📋 履歴</button>
     <button role="tab" data-tab="items" aria-selected="false">✏️ グッズ登録</button>
+    <button role="tab" data-tab="conf" aria-selected="false" class="conf-tab" aria-label="設定">⚙️<span> 設定</span></button>
   </nav>
 </header>
 
@@ -244,7 +278,7 @@ td.r,th.r{text-align:right}
     <div class="goods" id="goodsGrid"></div>
     <aside class="cart" id="cart">
       <h2>カート <button id="clearCart">全部消す</button></h2>
-      <button class="cart-toggle" id="cartToggle"><span id="cartToggleLbl">カート 0点</span><span>▲ 明細</span></button>
+      <button class="cart-toggle" id="cartToggle"><span id="cartToggleLbl">0点</span><span>▲ 明細</span></button>
       <ul class="lines" id="cartLines"></ul>
       <div class="total">
         <div class="lbl">合計</div>
@@ -284,14 +318,27 @@ td.r,th.r{text-align:right}
     <div class="list">
       <h2>登録済みグッズ（<span id="itemCount">0</span>）</h2>
       <ul id="itemList"></ul>
-      <div class="backup">
-        <h2>データの控え</h2>
-        <p>グッズと履歴をファイルに保存・読み込みできます（別の端末へ移すとき・念のための控えに）。</p>
-        <div class="row2">
-          <button type="button" id="bkSave">控えを保存（JSON）</button>
-          <button type="button" id="bkLoad">控えを読み込む</button>
-          <input type="file" id="bkFile" accept="application/json,.json" hidden>
-        </div>
+    </div>
+  </section>
+
+  <!-- 5. 設定 -->
+  <section id="conf" class="screen" role="tabpanel">
+    <div class="conf-block">
+      <h2>レジのボタンの大きさ</h2>
+      <p>小さくすると一度にたくさんのグッズが見えます。この端末だけの設定です。</p>
+      <div class="sizes" role="radiogroup" aria-label="ボタンの大きさ">
+        <button type="button" role="radio" data-size="l"><b>大</b><small>スマホで2列</small></button>
+        <button type="button" role="radio" data-size="m"><b>中</b><small>スマホで3列</small></button>
+        <button type="button" role="radio" data-size="s"><b>小</b><small>スマホで4列</small></button>
+      </div>
+    </div>
+    <div class="backup conf-block">
+      <h2>データの控え</h2>
+      <p>グッズと履歴をファイルに保存・読み込みできます（別の端末へ移すとき・念のための控えに）。</p>
+      <div class="row2">
+        <button type="button" id="bkSave">控えを保存（JSON）</button>
+        <button type="button" id="bkLoad">控えを読み込む</button>
+        <input type="file" id="bkFile" accept="application/json,.json" hidden>
       </div>
     </div>
   </section>
@@ -421,6 +468,20 @@ function download(name,text,type){
 function toast(html,ms=2000){const ts=$('#toast');ts.innerHTML=html;ts.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>ts.classList.remove('on'),ms)}
 
 
+// ---------- 表示の設定（端末ごと。控えファイルには含めない） ----------
+const UI_KEY='okaikei.ui';
+let UI={size:'l'};
+try{const u=JSON.parse(localStorage.getItem(UI_KEY)||'null');if(u&&['l','m','s'].includes(u.size))UI.size=u.size}catch(_){}
+function applyUI(){
+  document.documentElement.dataset.size=UI.size;
+  document.querySelectorAll('.sizes [data-size]').forEach(b=>b.setAttribute('aria-checked',b.dataset.size===UI.size));
+}
+document.querySelectorAll('.sizes [data-size]').forEach(b=>b.onclick=()=>{
+  UI.size=b.dataset.size;applyUI();
+  try{localStorage.setItem(UI_KEY,JSON.stringify(UI))}catch(_){}
+});
+applyUI();
+
 // ---------- tabs ----------
 function tab(name){
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name));
@@ -451,7 +512,7 @@ function renderReg(){
   $('#cartLines').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{delete S.cart[b.dataset.del];save();renderReg()});
   const t=cartTotal(), p=cartPcs();
   $('#total').textContent=t.toLocaleString('ja-JP'); $('#pcs').textContent=p+'点';
-  $('#cartToggleLbl').textContent=`カート ${p}点`;
+  $('#cartToggleLbl').textContent=`${p}点`;
   $('#goPay').disabled=t<=0; $('#clearCart').disabled=!p;
 }
 $('#clearCart').onclick=()=>{S.cart={};save();renderReg()};
