@@ -50,6 +50,7 @@ main{flex:1;min-height:0;overflow:auto}
 .good{display:flex;flex-direction:column;padding:0;overflow:hidden;text-align:left;position:relative}
 .good .img{flex:none;height:110px;position:relative;overflow:hidden;display:grid;place-items:center;font-size:56px;border-bottom:3px solid var(--line)}
 .good .img img,.prev .img img,.list .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.good .img img{object-fit:contain}
 .good .nm{padding:8px 10px 0;font-size:18px;line-height:1.25;min-height:2.5em}
 .good .pr{padding:0 10px 10px;font-size:26px;font-weight:800}
 .good .badge{position:absolute;top:6px;right:6px;background:#000;color:#fff;border-radius:999px;min-width:44px;height:44px;display:grid;place-items:center;font-size:22px;padding:0 8px}
@@ -133,6 +134,20 @@ main{flex:1;min-height:0;overflow:auto}
 .list .pr{font-size:24px;font-weight:800;min-width:5ch;text-align:right}
 .list li button{padding:0 16px;font-size:18px}
 .list li .del{border-color:var(--ng);color:var(--ng)}
+
+/* 画像の切り抜き（正方形） */
+.crop{position:fixed;inset:0;background:#fff;display:none;flex-direction:column;z-index:15}
+.crop.on{display:flex}
+.crop-area{flex:1;min-height:0;position:relative;overflow:hidden;background:#222;display:grid;place-items:center;touch-action:none;cursor:grab}
+.crop-area:active{cursor:grabbing}
+.crop-box{position:relative}
+.crop-box img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;user-select:none;-webkit-user-select:none;pointer-events:none}
+.crop-mask{position:absolute;inset:0;border:3px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.6);pointer-events:none}
+.crop-ctl{display:flex;flex-direction:column;gap:10px;padding:12px 16px;border-top:3px solid var(--line)}
+.crop-ctl .zoom{display:flex;align-items:center;gap:12px;font-weight:700}
+.crop-ctl input[type=range]{flex:1;height:44px}
+.crop-ctl p{margin:0;font-size:15px;color:var(--mute)}
+.crop-ctl .save{background:#000;color:#fff}
 
 /* ===== 4. 履歴 ===== */
 #hist{flex-direction:column;padding:16px 20px;gap:16px;overflow:auto;height:auto;min-height:100%}
@@ -254,6 +269,7 @@ td.r,th.r{text-align:right}
         <div class="img" id="fPrev">📦</div>
         <div class="fbtn">
           <input type="file" id="fFile" accept="image/*">
+          <button type="button" id="fRecrop" style="min-height:48px;font-size:16px" hidden>切り抜き直す</button>
           <button type="button" id="fClearImg" style="min-height:48px;font-size:16px">画像を外す</button>
         </div>
       </div>
@@ -311,6 +327,22 @@ td.r,th.r{text-align:right}
       </div>
       <button class="confirm" id="confirm">会計確定</button>
     </div>
+  </div>
+</div>
+
+<!-- 画像の切り抜き -->
+<div class="crop" id="crop" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+  <div class="pay-head">
+    <button type="button" id="cropCancel">← やめる</button>
+    <h2 id="cropTitle">画像を正方形に切り抜く</h2>
+  </div>
+  <div class="crop-area" id="cropArea">
+    <div class="crop-box" id="cropBox"><img id="cropImg" alt=""><div class="crop-mask"></div></div>
+  </div>
+  <div class="crop-ctl">
+    <label class="zoom">縮小 <input type="range" id="cropZoom" min="1" max="5" step="0.01" value="1" aria-label="拡大率"> 拡大</label>
+    <p>画像をドラッグして位置を合わせます（2本指でも拡大できます）</p>
+    <button type="button" class="save" id="cropOk">この範囲で決定</button>
   </div>
 </div>
 
@@ -488,31 +520,81 @@ function renderItems(){
   const g=isEdit&&S.goods.find(x=>x.id===S.editId);
   $('#fPrev').innerHTML=S.editImg?`<img src="${esc(S.editImg)}" alt="プレビュー">`:(g?initial(g):'📦');
   $('#fPrev').style.background=g?colorOf(g):'#eee';
+  $('#fRecrop').hidden=!S.editImg;
 }
 function startEdit(id){const g=S.goods.find(x=>x.id===id);S.editId=id;S.editImg=g.img||null;$('#fName').value=g.name;$('#fPrice').value=g.price;$('#fFile').value='';$('#fErr').textContent='';renderItems();$('#itemForm').scrollIntoView({block:'start'})}
 function resetForm(){S.editId=null;S.editImg=null;$('#fName').value='';$('#fPrice').value='';$('#fFile').value='';$('#fErr').textContent=''}
-// 画像は長辺 480px の JPEG に縮めて保存（端末の保存容量対策）
-function shrinkImage(file){
-  return new Promise((ok,ng)=>{
-    const url=URL.createObjectURL(file),img=new Image();
-    img.onload=()=>{
-      const M=480,r=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
-      const w=Math.max(1,Math.round(img.naturalWidth*r)),h=Math.max(1,Math.round(img.naturalHeight*r));
-      const c=document.createElement('canvas');c.width=w;c.height=h;
-      const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);
-      URL.revokeObjectURL(url);ok(c.toDataURL('image/jpeg',0.8));
-    };
-    img.onerror=()=>{URL.revokeObjectURL(url);ng(new Error('load'))};
-    img.src=url;
-  });
+// ---------- 画像の切り抜き ----------
+// 選んだ画像から正方形を切り抜き、480px 四方の JPEG にして保存（端末の保存容量対策）
+const CROP_OUT=480;
+const C={img:null,url:null,S:0,base:1,zoom:1,tx:0,ty:0,pts:new Map(),pinch:null};
+const cropOpen=()=>$('#crop').classList.contains('on');
+function loadImage(src){
+  return new Promise((ok,ng)=>{const img=new Image();img.onload=()=>ok(img);img.onerror=()=>ng(new Error('load'));img.src=src});
 }
-$('#fFile').onchange=async e=>{
-  const f=e.target.files[0];if(!f)return;
+function cropLayout(keep){
+  // 枠の一辺を画面に合わせ直す。keep=true なら今見ている中心と拡大率を保つ
+  const a=$('#cropArea'),S=Math.max(120,Math.floor(Math.min(a.clientWidth,a.clientHeight)-32));
+  const w=C.img.naturalWidth,h=C.img.naturalHeight;
+  const scale=C.base*C.zoom,cx=keep?(C.S/2-C.tx)/scale:w/2,cy=keep?(C.S/2-C.ty)/scale:h/2;
+  C.S=S;C.base=S/Math.min(w,h);
+  $('#cropBox').style.width=$('#cropBox').style.height=S+'px';
+  const img=$('#cropImg');img.style.width=w+'px';img.style.height=h+'px';
+  cropCenter(cx,cy);
+}
+function cropCenter(cx,cy){
+  const sc=C.base*C.zoom;C.tx=C.S/2-cx*sc;C.ty=C.S/2-cy*sc;cropDraw();
+}
+function cropDraw(){
+  // 枠の外に画像の端が出ないように位置を制限
+  const sc=C.base*C.zoom,w=C.img.naturalWidth*sc,h=C.img.naturalHeight*sc;
+  C.tx=Math.min(0,Math.max(C.S-w,C.tx));C.ty=Math.min(0,Math.max(C.S-h,C.ty));
+  $('#cropImg').style.transform=`translate(${C.tx}px,${C.ty}px) scale(${sc})`;
+  $('#cropZoom').value=C.zoom;
+}
+function cropZoomTo(z){
+  const sc=C.base*C.zoom,cx=(C.S/2-C.tx)/sc,cy=(C.S/2-C.ty)/sc;
+  C.zoom=Math.min(5,Math.max(1,z));cropCenter(cx,cy);
+}
+async function openCrop(src,url){
   $('#fErr').textContent='画像を読み込み中…';
-  try{S.editImg=await shrinkImage(f);$('#fErr').textContent=''}
-  catch(_){$('#fErr').textContent='この画像は読み込めませんでした（JPEG / PNG を試してください）'}
-  renderItems();
+  try{C.img=await loadImage(src)}
+  catch(_){if(url)URL.revokeObjectURL(url);$('#fErr').textContent='この画像は読み込めませんでした（JPEG / PNG を試してください）';$('#fFile').value='';return}
+  $('#fErr').textContent='';C.url=url||null;C.zoom=1;C.pts.clear();C.pinch=null;
+  $('#cropImg').src=src;$('#crop').classList.add('on');cropLayout(false);$('#cropOk').focus();
+}
+function closeCrop(){
+  $('#crop').classList.remove('on');$('#cropImg').removeAttribute('src');
+  if(C.url)URL.revokeObjectURL(C.url);C.img=C.url=null;$('#fFile').value='';
+}
+$('#cropOk').onclick=()=>{
+  const sc=C.base*C.zoom,side=C.S/sc,O=Math.max(1,Math.min(CROP_OUT,Math.round(side)));
+  const c=document.createElement('canvas');c.width=c.height=O;
+  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,O,O);
+  x.drawImage(C.img,-C.tx/sc,-C.ty/sc,side,side,0,0,O,O);
+  S.editImg=c.toDataURL('image/jpeg',0.8);closeCrop();renderItems();
 };
+$('#cropCancel').onclick=closeCrop;
+$('#cropZoom').oninput=e=>cropZoomTo(+e.target.value);
+const area=$('#cropArea');
+area.addEventListener('pointerdown',e=>{area.setPointerCapture(e.pointerId);C.pts.set(e.pointerId,{x:e.clientX,y:e.clientY});C.pinch=null});
+area.addEventListener('pointermove',e=>{
+  const p=C.pts.get(e.pointerId);if(!p)return;
+  if(C.pts.size===1){C.tx+=e.clientX-p.x;C.ty+=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;cropDraw();return}
+  p.x=e.clientX;p.y=e.clientY;
+  const [a,b]=[...C.pts.values()],d=Math.hypot(a.x-b.x,a.y-b.y);
+  if(C.pinch)cropZoomTo(C.pinch.zoom*d/C.pinch.d);else C.pinch={d,zoom:C.zoom};
+});
+const ptrUp=e=>{C.pts.delete(e.pointerId);C.pinch=null};
+area.addEventListener('pointerup',ptrUp);area.addEventListener('pointercancel',ptrUp);
+area.addEventListener('wheel',e=>{e.preventDefault();cropZoomTo(C.zoom*(e.deltaY<0?1.1:1/1.1))},{passive:false});
+addEventListener('resize',()=>{if(cropOpen())cropLayout(true)});
+document.addEventListener('keydown',e=>{if(cropOpen()&&e.key==='Escape'){e.preventDefault();closeCrop()}});
+$('#fFile').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const url=URL.createObjectURL(f);openCrop(url,url);
+};
+$('#fRecrop').onclick=()=>{if(S.editImg)openCrop(S.editImg)};
 $('#fClearImg').onclick=()=>{S.editImg=null;$('#fFile').value='';renderItems()};
 $('#fCancel').onclick=()=>{resetForm();renderItems()};
 $('#fSave').onclick=()=>{
