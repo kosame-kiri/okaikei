@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>おかいけい</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="おかいけい">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+/* おかいけい: イベント会場向け簡易レジ。大きな文字 / 大きなタップ領域 / 高コントラスト */
+:root{
+  --fg:#000; --bg:#fff; --mute:#444; --line:#000;
+  --accent:#ffd400;   /* 合計・主要ボタン */
+  --ok:#0a7d2c; --ng:#c40000;
+  --tap:64px;         /* 最小タップ高さ */
+  --fs:20px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:var(--fs)/1.4 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;color:var(--fg);background:var(--bg);display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button,input,select{font:inherit;color:inherit}
+button{min-height:var(--tap);border:3px solid var(--line);background:#fff;border-radius:10px;font-weight:700;cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+button:active{transform:translateY(2px);background:#eee}
+button:disabled{opacity:.35;cursor:not-allowed}
+:focus-visible{outline:4px solid #0057ff;outline-offset:2px}
+.yen::before{content:"¥"}
+.num{font-variant-numeric:tabular-nums}
+
+
+/* --- ヘッダー / タブ --- */
+header{display:flex;align-items:stretch;border-bottom:3px solid var(--line)}
+header h1{margin:0;font-size:20px;padding:0 16px;display:flex;align-items:center;white-space:nowrap}
+nav{display:flex;flex:1}
+nav button{flex:1;border:0;border-left:3px solid var(--line);border-radius:0;font-size:22px;min-height:68px}
+nav button[aria-selected=true]{background:#000;color:#fff}
+
+main{flex:1;min-height:0;overflow:auto}
+.screen{display:none;height:100%}
+.screen.on{display:flex}
+
+/* ===== 1. レジ ===== */
+#reg{gap:0}
+.goods{flex:1;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;align-content:start}
+.good{display:flex;flex-direction:column;padding:0;overflow:hidden;text-align:left;position:relative}
+.good .img{flex:none;height:110px;position:relative;overflow:hidden;display:grid;place-items:center;font-size:56px;border-bottom:3px solid var(--line)}
+.good .img img,.prev .img img,.list .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.good .nm{padding:8px 10px 0;font-size:18px;line-height:1.25;min-height:2.5em}
+.good .pr{padding:0 10px 10px;font-size:26px;font-weight:800}
+.good .badge{position:absolute;top:6px;right:6px;background:#000;color:#fff;border-radius:999px;min-width:44px;height:44px;display:grid;place-items:center;font-size:22px;padding:0 8px}
+
+.cart{width:400px;border-left:3px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.cart h2{margin:0;padding:12px 16px;font-size:20px;border-bottom:2px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.cart h2 button{min-height:44px;font-size:16px;padding:0 12px}
+.cart-toggle{display:none}
+.lines{flex:1;overflow:auto;list-style:none;margin:0;padding:0}
+.lines li{display:grid;grid-template-columns:1fr auto;gap:6px 8px;padding:10px 16px;border-bottom:1px solid #999}
+.lines .ln{font-weight:700}
+.lines .sub{text-align:right;font-size:22px;font-weight:800}
+.lines .ctl{grid-column:1/-1;display:flex;gap:8px;align-items:center}
+.lines .ctl button{min-width:var(--tap);font-size:28px;line-height:1}
+.lines .ctl .q{min-width:3ch;text-align:center;font-size:24px;font-weight:800}
+.lines .ctl .del{margin-left:auto;font-size:16px;padding:0 12px;border-color:var(--ng);color:var(--ng)}
+.total{padding:14px 16px;border-top:3px solid var(--line);background:var(--accent)}
+.total .lbl{font-size:16px;font-weight:700}
+.total .amt{font-size:56px;font-weight:900;line-height:1.1;text-align:right}
+.total .pcs{font-size:16px;text-align:right}
+.go{margin:12px 16px 16px;min-height:80px;font-size:28px;background:#000;color:#fff}
+
+.empty{margin:auto;text-align:center;padding:32px;color:var(--mute)}
+.empty .big{font-size:64px}
+.empty p{font-size:22px;margin:8px 0 16px}
+.empty button{padding:0 24px}
+
+/* ===== 2. 会計（オーバーレイ） ===== */
+.pay{position:fixed;inset:0;background:#fff;display:none;flex-direction:column;z-index:10}
+.pay.on{display:flex}
+.pay-head{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:3px solid var(--line)}
+.pay-head h2{margin:0;font-size:24px;flex:1}
+.pay-head button{padding:0 18px}
+.pay-body{flex:1;display:grid;grid-template-columns:1fr 1fr;min-height:0}
+.disp{padding:16px 24px;display:flex;flex-direction:column;gap:12px;border-right:3px solid var(--line);overflow:auto}
+.row{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--line);padding-bottom:6px}
+.row .k{font-size:20px;font-weight:700}
+.row .v{font-size:44px;font-weight:900}
+.row.in .v{background:#f2f2f2;padding:0 10px;border-radius:6px;min-width:6ch;text-align:right}
+.change{margin-top:auto;border:4px solid var(--line);border-radius:12px;padding:12px 16px}
+.change .k{font-size:22px;font-weight:800}
+.change .v{font-size:84px;font-weight:900;text-align:right;line-height:1.05}
+.change.ok{background:#e6f6ea;border-color:var(--ok)}
+.change.ng{background:#ffe5e5;border-color:var(--ng);color:var(--ng)}
+.change .msg{font-size:20px;font-weight:800}
+.mini{font-size:16px;color:var(--mute);margin:0;padding-left:1.2em}
+
+.keys{padding:16px;display:flex;flex-direction:column;gap:10px;overflow:auto}
+.quick{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.quick button{font-size:22px;min-height:72px}
+.quick .just{background:var(--accent)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex:1}
+.pad button{font-size:36px;min-height:72px}
+.confirm{min-height:88px;font-size:30px;background:#000;color:#fff}
+
+/* 完了トースト */
+.toast{position:fixed;left:50%;top:20%;transform:translateX(-50%);background:#000;color:#fff;padding:24px 36px;border-radius:14px;font-size:28px;font-weight:800;z-index:20;display:none;text-align:center;pointer-events:none}
+.toast.on{display:block}
+.toast small{display:block;font-size:20px;font-weight:600}
+
+/* ===== 3. グッズ登録 ===== */
+#items{gap:0}
+.form{width:420px;padding:16px 20px;border-right:3px solid var(--line);overflow:auto}
+.form h2,.list h2{margin:0 0 12px;font-size:22px}
+.form label{display:block;font-weight:700;margin:14px 0 6px}
+.form input[type=text],.form input[type=number]{width:100%;min-height:var(--tap);border:3px solid var(--line);border-radius:10px;padding:0 12px;font-size:24px}
+.prev{display:flex;gap:12px;align-items:center}
+.prev .img{width:120px;height:120px;border:3px solid var(--line);border-radius:10px;display:grid;place-items:center;font-size:56px;overflow:hidden;flex:none;position:relative}
+.prev .fbtn{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+.prev input[type=file]{font-size:16px;width:100%}
+.form .acts{display:flex;gap:10px;margin-top:20px}
+.form .acts button{flex:1}
+.form .save{background:#000;color:#fff}
+.form .err{color:var(--ng);font-weight:800;font-size:16px;min-height:1.4em;margin:6px 0 0}
+.list{flex:1;padding:16px 20px;overflow:auto}
+.list ul{list-style:none;margin:0;padding:0}
+.list li{display:flex;gap:12px;align-items:center;border-bottom:2px solid #999;padding:8px 0}
+.list li.editing{background:#fff6c2}
+.list .th{width:64px;height:64px;border:2px solid var(--line);border-radius:8px;display:grid;place-items:center;font-size:32px;overflow:hidden;flex:none;position:relative}
+.list .nm{flex:1;font-weight:700}
+.list .pr{font-size:24px;font-weight:800;min-width:5ch;text-align:right}
+.list li button{padding:0 16px;font-size:18px}
+.list li .del{border-color:var(--ng);color:var(--ng)}
+
+/* ===== 4. 履歴 ===== */
+#hist{flex-direction:column;padding:16px 20px;gap:16px;overflow:auto;height:auto;min-height:100%}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.sum>div{border:3px solid var(--line);border-radius:12px;padding:10px 14px}
+.sum .k{font-weight:700;font-size:16px}
+.sum .v{font-size:40px;font-weight:900;text-align:right}
+.sum .main{background:var(--accent)}
+.hist-grid{display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start}
+.hist-grid h2{margin:0 0 8px;font-size:22px}
+table{border-collapse:collapse;width:100%}
+td,th{border-bottom:2px solid #999;padding:8px 6px;text-align:left}
+td.r,th.r{text-align:right}
+.tx{border:3px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:12px}
+.tx header{border:0;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tx .t{font-size:22px;font-weight:800}
+.tx .no{color:var(--mute);font-size:16px}
+.tx ul{margin:6px 0;padding-left:1.2em}
+.tx .nums{display:flex;gap:18px;flex-wrap:wrap;font-size:18px}
+.tx .nums b{font-size:24px}
+.tx .cancel{padding:0 14px;font-size:16px;min-height:48px;border-color:var(--ng);color:var(--ng)}
+.tx.void{opacity:.5;border-style:dashed}
+.tx.void .t,.tx.void ul,.tx.void .nums{text-decoration:line-through}
+.tx .voidtag{font-weight:800;color:var(--ng)}
+.hbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.hbar select{min-height:52px;border:3px solid var(--line);border-radius:10px;padding:0 10px;font-size:20px;background:#fff}
+.hbar button{min-height:52px;padding:0 16px;font-size:16px}
+.hbar .sp{flex:1}
+.hbar .danger{border-color:var(--ng);color:var(--ng)}
+.backup{border-top:3px solid var(--line);margin-top:24px;padding-top:12px}
+.backup p{font-size:15px;color:var(--mute);margin:4px 0 8px}
+.backup .row2{display:flex;gap:10px;flex-wrap:wrap}
+.backup button{min-height:52px;padding:0 16px;font-size:16px}
+
+/* ===== スマホ縦 ===== */
+@media (max-width:820px){
+  :root{--fs:18px;--tap:56px}
+  header h1{display:none}
+  nav button{font-size:18px;min-height:60px}
+  nav button:first-child{border-left:0}
+  #reg{flex-direction:column}
+  .goods{grid-template-columns:repeat(2,1fr);grid-auto-rows:max-content;gap:10px;padding:10px;padding-bottom:200px}
+  .good .img{height:84px;font-size:44px}
+  .good .pr{font-size:22px}
+  /* カートは下部固定シート。タップで明細を開く */
+  .cart{position:fixed;left:0;right:0;bottom:0;width:auto;border-left:0;border-top:3px solid var(--line);background:#fff;max-height:75vh;z-index:5}
+  .cart h2{display:none}
+  .cart-toggle{display:flex;justify-content:space-between;align-items:center;border:0;border-radius:0;border-bottom:2px solid var(--line);font-size:18px;padding:0 16px;min-height:48px}
+  .cart:not(.open) .lines{display:none}
+  .total{display:flex;justify-content:space-between;align-items:center;padding:6px 14px}
+  .total .amt{font-size:40px}
+  .total .pcs{display:none}
+  .go{margin:8px 10px 10px;min-height:64px;font-size:24px}
+  .pay-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .disp{border-right:0;border-bottom:3px solid var(--line);padding:10px 14px;gap:6px}
+  .row .v{font-size:30px}
+  .change .v{font-size:52px}
+  .mini{display:none}
+  .keys{padding:10px;gap:8px}
+  .quick button{font-size:16px;min-height:56px;padding:0 2px;white-space:nowrap}
+  .pad button{font-size:28px;min-height:56px}
+  .confirm{min-height:68px;font-size:24px}
+  #items{flex-direction:column}
+  .form{width:auto;border-right:0;border-bottom:3px solid var(--line)}
+  .sum{grid-template-columns:1fr 1fr}
+  .sum .main{grid-column:1/-1}
+  .sum .v{font-size:30px}
+  .hist-grid{grid-template-columns:1fr}
+  .list li{flex-wrap:wrap}
+  .list .nm{flex:1 1 calc(100% - 80px)}
+  .list .pr{flex:1;margin-left:76px;text-align:left}
+}
+@media (prefers-reduced-motion:reduce){button:active{transform:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>おかいけい</h1>
+  <nav role="tablist">
+    <button role="tab" data-tab="reg" aria-selected="true">🧾 レジ</button>
+    <button role="tab" data-tab="hist" aria-selected="false">📋 履歴</button>
+    <button role="tab" data-tab="items" aria-selected="false">✏️ グッズ登録</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 1. レジ -->
+  <section id="reg" class="screen on" role="tabpanel">
+    <div class="goods" id="goodsGrid"></div>
+    <aside class="cart" id="cart">
+      <h2>カート <button id="clearCart">全部消す</button></h2>
+      <button class="cart-toggle" id="cartToggle"><span id="cartToggleLbl">カート 0点</span><span>▲ 明細</span></button>
+      <ul class="lines" id="cartLines"></ul>
+      <div class="total">
+        <div class="lbl">合計</div>
+        <div class="amt num yen" id="total">0</div>
+        <div class="pcs" id="pcs">0点</div>
+      </div>
+      <button class="go" id="goPay">会計する →</button>
+    </aside>
+  </section>
+
+  <!-- 4. 履歴 -->
+  <section id="hist" class="screen" role="tabpanel"></section>
+
+  <!-- 3. グッズ登録 -->
+  <section id="items" class="screen" role="tabpanel">
+    <form class="form" id="itemForm" onsubmit="return false">
+      <h2 id="formTitle">新しいグッズを登録</h2>
+      <label for="fName">名前</label>
+      <input type="text" id="fName" placeholder="例: 新刊「夜行列車」" autocomplete="off">
+      <label for="fPrice">値段（円）</label>
+      <input type="number" id="fPrice" inputmode="numeric" min="0" step="10" placeholder="500">
+      <label>画像</label>
+      <div class="prev">
+        <div class="img" id="fPrev">📦</div>
+        <div class="fbtn">
+          <input type="file" id="fFile" accept="image/*">
+          <button type="button" id="fClearImg" style="min-height:48px;font-size:16px">画像を外す</button>
+        </div>
+      </div>
+      <p class="err" id="fErr"></p>
+      <div class="acts">
+        <button type="button" id="fCancel">クリア</button>
+        <button type="button" class="save" id="fSave">登録する</button>
+      </div>
+    </form>
+    <div class="list">
+      <h2>登録済みグッズ（<span id="itemCount">0</span>）</h2>
+      <ul id="itemList"></ul>
+      <div class="backup">
+        <h2>データの控え</h2>
+        <p>グッズと履歴をファイルに保存・読み込みできます（別の端末へ移すとき・念のための控えに）。</p>
+        <div class="row2">
+          <button type="button" id="bkSave">控えを保存（JSON）</button>
+          <button type="button" id="bkLoad">控えを読み込む</button>
+          <input type="file" id="bkFile" accept="application/json,.json" hidden>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 2. 会計 -->
+<div class="pay" id="pay" role="dialog" aria-modal="true" aria-labelledby="payTitle">
+  <div class="pay-head">
+    <button id="payBack">← 戻る</button>
+    <h2 id="payTitle">会計</h2>
+  </div>
+  <div class="pay-body">
+    <div class="disp">
+      <div class="row"><span class="k">合計</span><span class="v num yen" id="pTotal">0</span></div>
+      <div class="row in"><span class="k">お預かり</span><span class="v num yen" id="pIn">0</span></div>
+      <div class="change" id="pChange">
+        <div class="k" id="pChangeK">お釣り</div>
+        <div class="v num" id="pChangeV">—</div>
+        <div class="msg" id="pMsg"></div>
+      </div>
+      <ul class="mini" id="pLines"></ul>
+    </div>
+    <div class="keys">
+      <div class="quick">
+        <button data-add="1000">+1000</button>
+        <button data-add="5000">+5000</button>
+        <button data-add="10000">+10000</button>
+        <button class="just" id="just">ちょうど</button>
+      </div>
+      <div class="pad">
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="C" aria-label="クリア">C</button><button data-k="0">0</button><button data-k="00">00</button>
+      </div>
+      <button class="confirm" id="confirm">会計確定</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+'use strict';
+// ---------- 保存 ----------
+const KEY='okaikei.v1';
+const PALETTE=['#ffd6d6','#d6e8ff','#fff1b8','#e3d6ff','#d6ffe0','#ffe3c2','#cfeff2','#f0d6ff'];
+let S={goods:[],hist:[],cart:{},nextId:1,paid:'',editId:null,editImg:null,histDay:null};
+
+const isImg=s=>typeof s==='string'&&/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s);
+const toInt=(v,min=0,max=10000000)=>{const n=Math.floor(Number(v));return Number.isFinite(n)&&n>=min&&n<=max?n:null};
+function cleanGoods(arr){
+  if(!Array.isArray(arr))return [];
+  const out=[],seen=new Set();
+  for(const g of arr){
+    if(!g||typeof g!=='object')continue;
+    const id=toInt(g.id,1,1e9),price=toInt(g.price);
+    const name=typeof g.name==='string'?g.name.trim().slice(0,100):'';
+    if(id==null||price==null||!name||seen.has(id))continue;
+    seen.add(id);out.push({id,name,price,img:isImg(g.img)?g.img:null});
+  }
+  return out;
+}
+function cleanHist(arr){
+  if(!Array.isArray(arr))return [];
+  const out=[];
+  for(const h of arr){
+    if(!h||typeof h!=='object'||!Array.isArray(h.lines))continue;
+    const no=toInt(h.no,1,1e9),time=toInt(h.time,0,1e14),total=toInt(h.total),paid=toInt(h.paid),change=toInt(h.change);
+    if([no,time,total,paid,change].includes(null))continue;
+    const lines=h.lines.map(l=>({id:toInt(l&&l.id,0,1e9)||0,name:typeof(l&&l.name)==='string'?l.name.slice(0,100):'?',price:toInt(l&&l.price)||0,qty:toInt(l&&l.qty,1,100000)||1}));
+    out.push({no,time,lines,total,paid,change,void:!!h.void});
+  }
+  return out;
+}
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem(KEY)||'null');
+    if(d){
+      S.goods=cleanGoods(d.goods);S.hist=cleanHist(d.hist);
+      S.nextId=Math.max(toInt(d.nextId,1,1e9)||1,...S.goods.map(g=>g.id+1));
+      if(d.cart&&typeof d.cart==='object')for(const [k,v] of Object.entries(d.cart)){const q=toInt(v,1,100000);if(q&&S.goods.some(g=>g.id==k))S.cart[k]=q}
+    }
+  }catch(e){alert('保存データを読み込めませんでした。');}
+}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify({goods:S.goods,hist:S.hist,nextId:S.nextId,cart:S.cart}));return true}
+  catch(e){alert('保存できませんでした（容量不足の可能性があります）。画像の数を減らしてください。');return false}
+}
+
+// ---------- utils ----------
+const $=s=>document.querySelector(s);
+const yen=n=>'¥'+n.toLocaleString('ja-JP');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const colorOf=g=>PALETTE[g.id%PALETTE.length];
+const initial=g=>esc(Array.from(g.name)[0]||'?');
+const thumb=g=>isImg(g.img)?`<img src="${esc(g.img)}" alt="">`:`<span>${initial(g)}</span>`;
+const cartLines=()=>Object.entries(S.cart).map(([id,q])=>{const g=S.goods.find(x=>x.id==id);return g&&{...g,qty:q}}).filter(Boolean);
+const cartTotal=()=>cartLines().reduce((a,l)=>a+l.price*l.qty,0);
+const cartPcs=()=>cartLines().reduce((a,l)=>a+l.qty,0);
+const hhmm=t=>new Date(t).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+const dayKey=t=>{const d=new Date(t);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+const dayLabel=k=>{const [y,m,d]=k.split('-');return `${+m}/${+d}`+(k===dayKey(Date.now())?'（今日）':'')};
+function download(name,text,type){
+  const blob=new Blob([text],{type});
+  const file=new File([blob],name,{type});
+  if(navigator.standalone&&navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file]}).catch(()=>{});return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+}
+function toast(html,ms=2000){const ts=$('#toast');ts.innerHTML=html;ts.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>ts.classList.remove('on'),ms)}
+
+
+// ---------- tabs ----------
+function tab(name){
+  document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===name));
+  render();
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
+
+// ---------- 1. レジ ----------
+function renderReg(){
+  const grid=$('#goodsGrid');
+  if(!S.goods.length){
+    grid.innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="big">📦</div><p>グッズがまだ登録されていません</p><button data-goto="items">グッズを登録する →</button></div>`;
+  }else{
+    grid.innerHTML=S.goods.map(g=>`<button class="good" data-id="${g.id}" aria-label="${esc(g.name)} ${g.price}円 を追加">
+      <div class="img" style="background:${colorOf(g)}">${thumb(g)}</div>
+      <div class="nm">${esc(g.name)}</div><div class="pr">${yen(g.price)}</div>
+      ${S.cart[g.id]?`<span class="badge">${S.cart[g.id]}</span>`:''}</button>`).join('');
+    grid.querySelectorAll('.good').forEach(b=>b.onclick=()=>{S.cart[b.dataset.id]=(S.cart[b.dataset.id]||0)+1;save();renderReg()});
+  }
+  const ls=cartLines();
+  $('#cartLines').innerHTML=ls.length?ls.map(l=>`<li>
+      <span class="ln">${esc(l.name)}<br><small>${yen(l.price)} × ${l.qty}</small></span><span class="sub num">${yen(l.price*l.qty)}</span>
+      <span class="ctl"><button data-d="-1" data-id="${l.id}" aria-label="減らす">−</button><span class="q num">${l.qty}</span><button data-d="1" data-id="${l.id}" aria-label="増やす">＋</button>
+      <button class="del" data-del="${l.id}">削除</button></span></li>`).join('')
+    :`<li style="display:block;color:#444;padding:24px 16px;text-align:center">カートは空です<br><small>グッズをタップして追加</small></li>`;
+  $('#cartLines').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const id=b.dataset.id;S.cart[id]+= +b.dataset.d;if(S.cart[id]<=0)delete S.cart[id];save();renderReg()});
+  $('#cartLines').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{delete S.cart[b.dataset.del];save();renderReg()});
+  const t=cartTotal(), p=cartPcs();
+  $('#total').textContent=t.toLocaleString('ja-JP'); $('#pcs').textContent=p+'点';
+  $('#cartToggleLbl').textContent=`カート ${p}点`;
+  $('#goPay').disabled=t<=0; $('#clearCart').disabled=!p;
+}
+$('#clearCart').onclick=()=>{S.cart={};save();renderReg()};
+$('#cartToggle').onclick=()=>$('#cart').classList.toggle('open');
+$('#goPay').onclick=()=>openPay();
+document.addEventListener('click',e=>{const b=e.target.closest('[data-goto]');if(b)tab(b.dataset.goto)});
+
+// ---------- 2. 会計 ----------
+const payOpen=()=>$('#pay').classList.contains('on');
+function openPay(){if(cartTotal()<=0)return;S.paid='';$('#pay').classList.add('on');renderPay()}
+function closePay(){$('#pay').classList.remove('on')}
+function renderPay(){
+  const t=cartTotal(), paid=+S.paid||0;
+  $('#pTotal').textContent=t.toLocaleString('ja-JP');
+  $('#pIn').textContent=paid.toLocaleString('ja-JP');
+  $('#pLines').innerHTML=cartLines().map(l=>`<li>${esc(l.name)} × ${l.qty}　${yen(l.price*l.qty)}</li>`).join('');
+  const c=$('#pChange');c.className='change';
+  if(!paid){$('#pChangeK').textContent='お釣り';$('#pChangeV').textContent='—';$('#pMsg').textContent='お預かり金額を入力してください'}
+  else if(paid<t){c.classList.add('ng');$('#pChangeK').textContent='⚠ 預かり不足';$('#pChangeV').textContent='あと '+yen(t-paid);$('#pMsg').textContent='不足しています。金額を確認してください'}
+  else{c.classList.add('ok');$('#pChangeK').textContent='お釣り';$('#pChangeV').textContent=yen(paid-t);$('#pMsg').textContent=paid===t?'ちょうどお預かり':''}
+  $('#confirm').disabled=!(paid>=t&&t>0);
+}
+function padKey(k){
+  if(k==='C')S.paid='';
+  else if(k==='BS')S.paid=S.paid.slice(0,-1);
+  else if((S.paid+k).length<=7)S.paid=String(+(S.paid+k)||'');
+  renderPay();
+}
+document.querySelectorAll('.pad button').forEach(b=>b.onclick=()=>padKey(b.dataset.k));
+document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{S.paid=String(Math.min((+S.paid||0)+ +b.dataset.add,9999999));renderPay()});
+$('#just').onclick=()=>{S.paid=String(cartTotal());renderPay()};
+$('#payBack').onclick=closePay;
+function confirmPay(){
+  const t=cartTotal(), paid=+S.paid||0;
+  if(!(paid>=t&&t>0))return;
+  const no=(S.hist.reduce((a,h)=>Math.max(a,h.no),0))+1;
+  S.hist.push({no,time:Date.now(),lines:cartLines().map(({id,name,price,qty})=>({id,name,price,qty})),total:t,paid,change:paid-t,void:false});
+  S.cart={};S.histDay=null;save();closePay();render();
+  toast(`会計完了 #${no}<small>お釣り ${yen(paid-t)}</small>`);
+}
+$('#confirm').onclick=confirmPay;
+document.addEventListener('keydown',e=>{
+  if(!payOpen())return;
+  if(/^[0-9]$/.test(e.key))padKey(e.key);
+  else if(e.key==='Backspace')padKey('BS');
+  else if(e.key==='Delete')padKey('C');
+  else if(e.key==='Enter')confirmPay();
+  else if(e.key==='Escape')closePay();
+  else return;
+  e.preventDefault();
+});
+
+// ---------- 3. グッズ登録 ----------
+function renderItems(){
+  $('#itemCount').textContent=S.goods.length;
+  $('#itemList').innerHTML=S.goods.length?S.goods.map(g=>`<li class="${S.editId===g.id?'editing':''}">
+      <span class="th" style="background:${colorOf(g)}">${thumb(g)}</span><span class="nm">${esc(g.name)}</span><span class="pr num">${yen(g.price)}</span>
+      <button data-edit="${g.id}">編集</button><button class="del" data-del="${g.id}">削除</button></li>`).join('')
+    :`<li style="display:block;text-align:center;color:#444;padding:32px 0;border:0"><div style="font-size:48px">📦</div>まだ登録がありません。<br>フォームから追加してください。</li>`;
+  $('#itemList').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>startEdit(+b.dataset.edit));
+  $('#itemList').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    const g=S.goods.find(x=>x.id==b.dataset.del);
+    if(confirm(`「${g.name}」を削除しますか？\n（過去の履歴は残ります）`)){S.goods=S.goods.filter(x=>x!==g);delete S.cart[g.id];if(S.editId===g.id)resetForm();save();render()}});
+  const isEdit=S.editId!=null;
+  $('#formTitle').textContent=isEdit?'グッズを編集':'新しいグッズを登録';
+  $('#fSave').textContent=isEdit?'更新する':'登録する';
+  $('#fCancel').textContent=isEdit?'編集をやめる':'クリア';
+  const g=isEdit&&S.goods.find(x=>x.id===S.editId);
+  $('#fPrev').innerHTML=S.editImg?`<img src="${esc(S.editImg)}" alt="プレビュー">`:(g?initial(g):'📦');
+  $('#fPrev').style.background=g?colorOf(g):'#eee';
+}
+function startEdit(id){const g=S.goods.find(x=>x.id===id);S.editId=id;S.editImg=g.img||null;$('#fName').value=g.name;$('#fPrice').value=g.price;$('#fFile').value='';$('#fErr').textContent='';renderItems();$('#itemForm').scrollIntoView({block:'start'})}
+function resetForm(){S.editId=null;S.editImg=null;$('#fName').value='';$('#fPrice').value='';$('#fFile').value='';$('#fErr').textContent=''}
+// 画像は長辺 480px の JPEG に縮めて保存（端末の保存容量対策）
+function shrinkImage(file){
+  return new Promise((ok,ng)=>{
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{
+      const M=480,r=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
+      const w=Math.max(1,Math.round(img.naturalWidth*r)),h=Math.max(1,Math.round(img.naturalHeight*r));
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);ok(c.toDataURL('image/jpeg',0.8));
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);ng(new Error('load'))};
+    img.src=url;
+  });
+}
+$('#fFile').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  $('#fErr').textContent='画像を読み込み中…';
+  try{S.editImg=await shrinkImage(f);$('#fErr').textContent=''}
+  catch(_){$('#fErr').textContent='この画像は読み込めませんでした（JPEG / PNG を試してください）'}
+  renderItems();
+};
+$('#fClearImg').onclick=()=>{S.editImg=null;$('#fFile').value='';renderItems()};
+$('#fCancel').onclick=()=>{resetForm();renderItems()};
+$('#fSave').onclick=()=>{
+  const name=$('#fName').value.trim(), price=$('#fPrice').value.trim();
+  if(!name){$('#fErr').textContent='名前を入力してください';return}
+  if(name.length>100){$('#fErr').textContent='名前は100文字以内にしてください';return}
+  if(!/^\d{1,7}$/.test(price)){$('#fErr').textContent='値段は0以上の整数（円）で入力してください';return}
+  const before=JSON.stringify(S.goods),nextId=S.nextId;
+  if(S.editId!=null){Object.assign(S.goods.find(x=>x.id===S.editId),{name,price:+price,img:S.editImg})}
+  else S.goods.push({id:S.nextId++,name,price:+price,img:S.editImg});
+  if(!save()){S.goods=JSON.parse(before);S.nextId=nextId;return}
+  const msg=S.editId!=null?'更新しました':'登録しました';
+  resetForm();render();toast(esc(name)+'<small>'+msg+'</small>',1200);
+};
+$('#itemForm').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){e.preventDefault();$('#fSave').click()}});
+
+// 控え（バックアップ）
+$('#bkSave').onclick=()=>{
+  download(`okaikei-backup-${dayKey(Date.now())}.json`,JSON.stringify({app:'okaikei',version:1,goods:S.goods,hist:S.hist,nextId:S.nextId}),'application/json');
+};
+$('#bkLoad').onclick=()=>$('#bkFile').click();
+$('#bkFile').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{
+    const d=JSON.parse(await f.text());
+    if(!d||d.app!=='okaikei')throw new Error('format');
+    const goods=cleanGoods(d.goods),hist=cleanHist(d.hist);
+    if(!confirm(`控えを読み込みます。\nグッズ ${goods.length}件・会計 ${hist.length}件\n\n今この端末にあるグッズと履歴は置き換わります。よろしいですか？`))return;
+    const old=localStorage.getItem(KEY);
+    S.goods=goods;S.hist=hist;S.cart={};S.nextId=Math.max(toInt(d.nextId,1,1e9)||1,...goods.map(g=>g.id+1));
+    if(!save()){if(old)localStorage.setItem(KEY,old);load();}
+    resetForm();render();toast('読み込みました');
+  }catch(_){alert('おかいけいの控えファイルではないようです。')}
+};
+
+// ---------- 4. 履歴 ----------
+function renderHist(){
+  const el=$('#hist');
+  if(!S.hist.length){el.innerHTML=`<div class="empty"><div class="big">📋</div><p>会計の記録はまだありません</p><button data-goto="reg">レジへ →</button></div>`;return}
+  const days=[...new Set(S.hist.map(h=>dayKey(h.time)))].sort().reverse();
+  if(!S.histDay||!days.includes(S.histDay))S.histDay=days[0];
+  const dh=S.hist.filter(h=>dayKey(h.time)===S.histDay), valid=dh.filter(h=>!h.void);
+  const sales=valid.reduce((a,h)=>a+h.total,0), pcs=valid.reduce((a,h)=>a+h.lines.reduce((b,l)=>b+l.qty,0),0);
+  const agg={};valid.forEach(h=>h.lines.forEach(l=>{const k=l.name+'\u0000'+l.price;agg[k]=agg[k]||{name:l.name,qty:0,amt:0};agg[k].qty+=l.qty;agg[k].amt+=l.qty*l.price}));
+  const rows=Object.values(agg).sort((a,b)=>b.qty-a.qty);
+  el.innerHTML=`
+    <div class="hbar">
+      <label for="hDay" style="font-weight:700">日付</label>
+      <select id="hDay">${days.map(d=>`<option value="${d}" ${d===S.histDay?'selected':''}>${dayLabel(d)}</option>`).join('')}</select>
+      <span class="sp"></span>
+      <button id="hCsv">CSV で書き出す（全日）</button>
+      <button id="hClear" class="danger">履歴を全部消す</button>
+    </div>
+    <div class="sum">
+      <div class="main"><div class="k">${dayLabel(S.histDay)} の売上合計</div><div class="v num">${yen(sales)}</div></div>
+      <div><div class="k">会計件数</div><div class="v num">${valid.length}件</div></div>
+      <div><div class="k">販売点数</div><div class="v num">${pcs}点</div></div>
+    </div>
+    <div class="hist-grid">
+      <div><h2>グッズ別 販売数</h2>
+        <table><thead><tr><th>グッズ</th><th class="r">数</th><th class="r">金額</th></tr></thead>
+        <tbody>${rows.map(v=>`<tr><td>${esc(v.name)}</td><td class="r num"><b>${v.qty}</b></td><td class="r num">${yen(v.amt)}</td></tr>`).join('')||'<tr><td colspan="3">—</td></tr>'}</tbody></table>
+        <p style="font-size:14px;color:#444">※取消した会計は集計に含みません</p>
+      </div>
+      <div><h2>会計一覧（新しい順）</h2>
+        ${[...dh].reverse().map(h=>`<article class="tx ${h.void?'void':''}">
+          <header><span class="t">${hhmm(h.time)}</span><span class="no">#${h.no}</span>
+            <span style="margin-left:auto">${h.void?'<span class="voidtag">取消済み</span>':`<button class="cancel" data-void="${h.no}">取消</button>`}</span></header>
+          <ul>${h.lines.map(l=>`<li>${esc(l.name)} × ${l.qty}　${yen(l.price*l.qty)}</li>`).join('')}</ul>
+          <div class="nums num"><span>合計 <b>${yen(h.total)}</b></span><span>預かり ${yen(h.paid)}</span><span>お釣り ${yen(h.change)}</span></div>
+        </article>`).join('')}
+      </div>
+    </div>`;
+  $('#hDay').onchange=e=>{S.histDay=e.target.value;renderHist()};
+  $('#hCsv').onclick=exportCsv;
+  $('#hClear').onclick=()=>{
+    if(!confirm(`会計の記録 ${S.hist.length}件 をすべて消します。元に戻せません。\n（必要なら先に「CSV で書き出す」で控えを取ってください）\n\n本当に消しますか？`))return;
+    S.hist=[];S.histDay=null;save();renderHist();
+  };
+  el.querySelectorAll('[data-void]').forEach(b=>b.onclick=()=>{const h=S.hist.find(x=>x.no==b.dataset.void);
+    if(confirm(`#${h.no}（${hhmm(h.time)} / ${yen(h.total)}）を取消しますか？\n返金 ${yen(h.total)} をお客さんに渡してください。`)){h.void=true;save();renderHist()}});
+}
+function exportCsv(){
+  const q=v=>{const s=String(v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const rows=[['日付','時刻','会計番号','状態','品名','単価','数量','小計','会計合計','預かり','お釣り']];
+  for(const h of S.hist)for(const l of h.lines)rows.push([dayKey(h.time),hhmm(h.time),h.no,h.void?'取消':'',l.name,l.price,l.qty,l.price*l.qty,h.total,h.paid,h.change]);
+  download(`okaikei-history-${dayKey(Date.now())}.csv`,'﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n'),'text/csv');
+}
+
+function render(){renderReg();renderItems();renderHist();if(payOpen())renderPay()}
+
+// ---------- 起動 ----------
+load();
+render();
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+// 画面が消えないようにする（対応ブラウザのみ）
+let wake=null;
+async function keepAwake(){try{if('wakeLock' in navigator&&!wake&&document.visibilityState==='visible'){wake=await navigator.wakeLock.request('screen');wake.addEventListener('release',()=>{wake=null})}}catch(_){}}
+document.addEventListener('pointerdown',keepAwake,{passive:true});
+document.addEventListener('visibilitychange',keepAwake);
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
