@@ -101,6 +101,27 @@ main{flex:1;min-height:0;overflow:auto}
 .change .msg{font-size:20px;font-weight:800}
 .mini{font-size:16px;color:var(--mute);margin:0;padding-left:1.2em}
 
+/* 会計完了後: 渡すグッズの確認リスト */
+.done{z-index:12}
+.done .pay-head{background:var(--ok);color:#fff}
+.done-chg{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 16px;border-bottom:3px solid var(--line);background:#e6f6ea}
+.done-chg .k{font-size:20px;font-weight:800}
+.done-chg .v{font-size:48px;font-weight:900}
+.pick-hint{margin:0;padding:8px 16px;font-size:15px;color:var(--mute);border-bottom:2px solid #999}
+.pick{flex:1;min-height:0;overflow:auto;list-style:none;margin:0;padding:0}
+.pick li{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:2px solid #999;cursor:pointer;-webkit-user-select:none;user-select:none}
+.pick .th{width:72px;height:72px;border:2px solid var(--line);border-radius:8px;display:grid;place-items:center;font-size:36px;overflow:hidden;flex:none;position:relative}
+.pick .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pick .nm{flex:1;font-size:22px;font-weight:700;min-width:0;overflow-wrap:anywhere}
+.pick .q{font-size:44px;font-weight:900;white-space:nowrap}
+.pick .q small{font-size:24px}
+.pick .ck{width:52px;height:52px;border:3px solid var(--line);border-radius:10px;display:grid;place-items:center;font-size:34px;font-weight:900;flex:none}
+.pick li.got{background:#eee}
+.pick li.got .nm,.pick li.got .q{color:#888;text-decoration:line-through}
+.pick li.got .ck{background:var(--ok);border-color:var(--ok);color:#fff}
+.done-foot{padding:10px 16px calc(10px + env(safe-area-inset-bottom));border-top:3px solid var(--line)}
+.done-foot button{width:100%;min-height:72px;font-size:26px;background:#000;color:#fff}
+
 .keys{padding:16px;display:flex;flex-direction:column;gap:10px;overflow:auto}
 .quick{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .quick button{font-size:22px;min-height:72px}
@@ -238,6 +259,10 @@ td.r,th.r{text-align:right}
   .go-amt{display:block;color:var(--accent);font-size:min(32px,8.5vw);font-weight:900;overflow:hidden;flex:1 1 0;min-width:0;text-align:left}
   .go-lbl{font-size:18px;flex:none}
   .pay-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .pick li{gap:10px;padding:8px 12px}
+  .pick .th{width:60px;height:60px;font-size:30px}
+  .pick .nm{font-size:18px}
+  .pick .q{font-size:38px}
   .disp{border-right:0;border-bottom:3px solid var(--line);padding:10px 14px;gap:6px}
   .row .v{font-size:30px}
   .change .v{font-size:52px}
@@ -394,6 +419,15 @@ td.r,th.r{text-align:right}
     <p>画像をドラッグして位置を合わせます（2本指でも拡大できます）</p>
     <button type="button" class="save" id="cropOk">この範囲で決定</button>
   </div>
+</div>
+
+<!-- 会計完了: 渡すグッズの確認 -->
+<div class="pay done" id="done" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
+  <div class="pay-head"><h2 id="doneTitle">会計完了</h2></div>
+  <div class="done-chg"><span class="k">お釣り</span><span class="v num" id="doneChg">¥0</span></div>
+  <p class="pick-hint">渡すグッズ（全 <b id="donePcs">0</b> 点）。用意できたものをタップしてチェック</p>
+  <ul class="pick" id="pickList"></ul>
+  <div class="done-foot"><button type="button" id="doneOk">次のお客さんへ →</button></div>
 </div>
 
 <div class="toast" id="toast" role="status"></div>
@@ -560,9 +594,31 @@ function confirmPay(){
   if(!(paid>=t&&t>0))return;
   const no=(S.hist.reduce((a,h)=>Math.max(a,h.no),0))+1;
   S.hist.push({no,time:Date.now(),lines:cartLines().map(({id,name,price,qty})=>({id,name,price,qty})),total:t,paid,change:paid-t,void:false});
+  const lines=cartLines();
   S.cart={};S.histDay=null;save();closePay();render();
-  toast(`会計完了 #${no}<small>お釣り ${yen(paid-t)}</small>`);
+  openDone(no,paid-t,lines);
 }
+// 会計完了後に、渡すグッズと個数を一覧で確認する画面
+const doneOpen=()=>$('#done').classList.contains('on');
+function openDone(no,change,lines){
+  $('#doneTitle').textContent=`会計完了 #${no}`;
+  $('#doneChg').textContent=yen(change);
+  $('#donePcs').textContent=lines.reduce((a,l)=>a+l.qty,0);
+  $('#pickList').innerHTML=lines.map(l=>`<li role="checkbox" aria-checked="false" tabindex="0">
+      <span class="th" style="background:${colorOf(l)}">${thumb(l)}</span>
+      <span class="nm">${esc(l.name)}</span><span class="q num"><small>×</small>${l.qty}</span><span class="ck" aria-hidden="true"></span></li>`).join('');
+  $('#pickList').querySelectorAll('li').forEach(li=>li.onclick=()=>{
+    const on=li.classList.toggle('got');li.setAttribute('aria-checked',on);li.querySelector('.ck').textContent=on?'✓':'';
+  });
+  $('#done').classList.add('on');$('#doneOk').focus();
+}
+function closeDone(){$('#done').classList.remove('on')}
+$('#doneOk').onclick=closeDone;
+document.addEventListener('keydown',e=>{
+  if(!doneOpen())return;
+  if(e.key==='Escape'||(e.key==='Enter'&&e.target===$('#doneOk'))){e.preventDefault();closeDone()}
+  else if((e.key===' '||e.key==='Enter')&&e.target.closest&&e.target.closest('#pickList li')){e.preventDefault();e.target.click()}
+});
 $('#confirm').onclick=confirmPay;
 document.addEventListener('keydown',e=>{
   if(!payOpen())return;
