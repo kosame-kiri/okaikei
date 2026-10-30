@@ -158,6 +158,8 @@ main{flex:1;min-height:0;overflow:auto}
 .list .pr{font-size:24px;font-weight:800;min-width:5ch;text-align:right}
 .list li button{padding:0 16px;font-size:18px}
 .list li .del{border-color:var(--ng);color:var(--ng)}
+.list h2{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.list h2 button{min-height:44px;font-size:16px;padding:0 12px;border-color:var(--ng);color:var(--ng)}
 
 /* 画像の切り抜き（正方形） */
 .crop{position:fixed;inset:0;background:#fff;display:none;flex-direction:column;z-index:15}
@@ -342,7 +344,7 @@ td.r,th.r{text-align:right}
       </div>
     </form>
     <div class="list">
-      <h2>登録済みグッズ（<span id="itemCount">0</span>）</h2>
+      <h2><span>登録済みグッズ（<span id="itemCount">0</span>）</span> <button type="button" id="clearItems">全部消す</button></h2>
       <ul id="itemList"></ul>
     </div>
   </section>
@@ -642,6 +644,7 @@ function renderItems(){
   $('#itemList').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     const g=S.goods.find(x=>x.id==b.dataset.del);
     if(confirm(`「${g.name}」を削除しますか？\n（過去の履歴は残ります）`)){S.goods=S.goods.filter(x=>x!==g);delete S.cart[g.id];if(S.editId===g.id)resetForm();save();render()}});
+  $('#clearItems').disabled=!S.goods.length;
   const isEdit=S.editId!=null;
   $('#formTitle').textContent=isEdit?'グッズを編集':'新しいグッズを登録';
   $('#fSave').textContent=isEdit?'更新する':'登録する';
@@ -651,6 +654,14 @@ function renderItems(){
   $('#fPrev').style.background=g?colorOf(g):'#eee';
   $('#fRecrop').hidden=!S.editImg;
 }
+$('#clearItems').onclick=()=>{
+  if(!S.goods.length)return;
+  if(!confirm(`登録済みグッズ ${S.goods.length}件 をすべて消します。元に戻せません。\n（必要なら先に設定画面の「控えを保存（JSON）」で控えを取ってください）\n（過去の履歴は残ります）\n\n本当に消しますか？`))return;
+  const before={goods:S.goods,cart:S.cart};
+  S.goods=[];S.cart={};resetForm();
+  if(!save()){S.goods=before.goods;S.cart=before.cart;return}
+  render();toast('グッズをすべて消しました');
+};
 function startEdit(id){const g=S.goods.find(x=>x.id===id);S.editId=id;S.editImg=g.img||null;$('#fName').value=g.name;$('#fPrice').value=g.price;$('#fFile').value='';$('#fErr').textContent='';renderItems();$('#itemForm').scrollIntoView({block:'start'})}
 function resetForm(){S.editId=null;S.editImg=null;$('#fName').value='';$('#fPrice').value='';$('#fFile').value='';$('#fErr').textContent=''}
 // ---------- 画像の切り抜き ----------
